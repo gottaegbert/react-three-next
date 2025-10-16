@@ -26,7 +26,19 @@ const View = dynamic(() => import('@/components/canvas/View').then((mod) => mod.
 const Common = dynamic(() => import('@/components/canvas/View').then((mod) => mod.Common), { ssr: false })
 
 export default function Page() {
-  const { density, pointSize, breatheAmplitude, rotationSpeed, wobbleFrequency, surfaceJitter, color } = useControls(
+  const {
+    density,
+    pointSize,
+    breatheAmplitude,
+    rotationSpeed,
+    wobbleFrequency,
+    surfaceJitter,
+    color,
+    forceStrength,
+    forceFrequency,
+    flowStrength,
+    morphDuration,
+  } = useControls(
     'Particles',
     {
       density: {
@@ -66,6 +78,30 @@ export default function Page() {
         step: 0.05,
       },
       color: '#f7c873',
+      forceStrength: {
+        value: 0.6,
+        min: 0,
+        max: 2,
+        step: 0.05,
+      },
+      forceFrequency: {
+        value: 0.45,
+        min: 0.05,
+        max: 2.5,
+        step: 0.05,
+      },
+      flowStrength: {
+        value: 0.25,
+        min: 0,
+        max: 1.5,
+        step: 0.05,
+      },
+      morphDuration: {
+        value: 10,
+        min: 1,
+        max: 30,
+        step: 1,
+      },
     },
   )
 
@@ -83,6 +119,10 @@ export default function Page() {
               rotationSpeed={rotationSpeed}
               wobbleFrequency={wobbleFrequency}
               surfaceJitter={surfaceJitter}
+              forceStrength={forceStrength}
+              forceFrequency={forceFrequency}
+              flowStrength={flowStrength}
+              morphDuration={morphDuration}
               scale={2}
             />
             <Common color='#000000' />

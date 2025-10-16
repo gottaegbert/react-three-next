@@ -208,6 +208,9 @@ export function DogParticles({
   rotationSpeed = 0.25,
   wobbleFrequency = 1.7,
   surfaceJitter = 0.05,
+  forceStrength = 0.6,
+  forceFrequency = 0.45,
+  flowStrength = 0.25,
   ...props
 }) {
   const group = useRef()
@@ -239,6 +242,9 @@ export function DogParticles({
           uMorphProgress: { value: 0 },
           uBreatheAmplitude: { value: breatheAmplitude },
           uWobbleFrequency: { value: wobbleFrequency },
+          uForceStrength: { value: forceStrength },
+          uForceFrequency: { value: forceFrequency },
+          uFlowStrength: { value: flowStrength },
         },
         vertexShader: `
           varying vec2 vUv;
@@ -256,6 +262,9 @@ export function DogParticles({
           uniform float uMorphProgress;
           uniform float uBreatheAmplitude;
           uniform float uWobbleFrequency;
+          uniform float uForceStrength;
+          uniform float uForceFrequency;
+          uniform float uFlowStrength;
 
           void main() {
             vec4 source = texture2D(uSourceMap, vUv);
@@ -264,12 +273,32 @@ export function DogParticles({
             float phase = mix(source.w, target.w, uMorphProgress);
             vec3 basePos = mix(source.xyz, target.xyz, uMorphProgress);
             float s = sin(uTime * uWobbleFrequency + phase);
-            vec3 displaced = basePos + dir * (s * uBreatheAmplitude * 0.6);
+            float forceBlend = clamp(1.0 - uMorphProgress, 0.0, 1.0);
+            vec3 swirl = vec3(-basePos.z, 0.0, basePos.x);
+            float swirlLen = length(swirl);
+            if (swirlLen > 0.0001) {
+              swirl /= swirlLen;
+            } else {
+              swirl = vec3(0.0, 1.0, 0.0);
+            }
+
+            float swirlAmount = uForceStrength * forceBlend * sin(uTime * uForceFrequency + phase);
+            vec3 forceOffset = swirl * swirlAmount;
+
+            float radialLen = length(basePos);
+            if (radialLen > 0.0001) {
+              vec3 radialDir = basePos / radialLen;
+              forceOffset += radialDir * (uForceStrength * 0.2 * forceBlend * cos(uTime * (uForceFrequency * 0.6) + phase));
+            }
+
+            forceOffset.y += uFlowStrength * forceBlend * sin(uTime * (uForceFrequency * 0.5) + basePos.x * 0.35 + basePos.z * 0.25);
+
+            vec3 displaced = basePos + forceOffset + dir * (s * uBreatheAmplitude * 0.6);
             gl_FragColor = vec4(displaced, phase);
           }
         `,
       }),
-    [],
+    [flowStrength, forceFrequency, forceStrength, breatheAmplitude, wobbleFrequency],
   )
 
   const pointsMaterial = useMemo(
@@ -358,6 +387,18 @@ export function DogParticles({
   }, [simulationMaterial, wobbleFrequency])
 
   useEffect(() => {
+    simulationMaterial.uniforms.uForceStrength.value = forceStrength
+  }, [simulationMaterial, forceStrength])
+
+  useEffect(() => {
+    simulationMaterial.uniforms.uForceFrequency.value = forceFrequency
+  }, [simulationMaterial, forceFrequency])
+
+  useEffect(() => {
+    simulationMaterial.uniforms.uFlowStrength.value = flowStrength
+  }, [simulationMaterial, flowStrength])
+
+  useEffect(() => {
     pointsMaterial.uniforms.uPointSize.value = pointSize
   }, [pointsMaterial, pointSize])
 
@@ -417,7 +458,7 @@ export function DogParticles({
 
     const elapsed = clock.elapsedTime
     simulationMaterial.uniforms.uTime.value = elapsed
-    simulationMaterial.uniforms.uMorphProgress.value = Math.min(elapsed / morphDuration, 1)
+    simulationMaterial.uniforms.uMorphProgress.value = Math.min(elapsed / Math.max(0.001, morphDuration), 1)
 
     gl.setRenderTarget(simulationTarget)
     gl.render(simulationScene.scene, simulationScene.camera)
