@@ -1,12 +1,31 @@
 'use client'
 
-import { useGLTF } from '@react-three/drei'
+import { useGLTF, useFBO } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef, useEffect } from 'react'
-import { AdditiveBlending, MathUtils, Matrix3, Vector3, Color, ShaderMaterial, BufferAttribute } from 'three'
+import { useEffect, useMemo, useRef } from 'react'
+import {
+  AdditiveBlending,
+  MathUtils,
+  Matrix3,
+  Vector3,
+  Color,
+  ShaderMaterial,
+  BufferAttribute,
+  DataTexture,
+  RGBAFormat,
+  FloatType,
+  NearestFilter,
+  ClampToEdgeWrapping,
+  Scene,
+  OrthographicCamera,
+  Mesh,
+  PlaneGeometry,
+} from 'three'
 import { MeshSurfaceSampler } from 'three-stdlib'
 
 const defaultPalette = ['#EA972A', '#74542D', '#D4A163', '#E6D5AE', '#925B1F']
+
+const getTextureSize = (count) => Math.max(1, Math.ceil(Math.sqrt(Math.max(1, count))))
 
 const createSurfaceParticles = (scene, density, surfaceJitter, palette = defaultPalette) => {
   const meshes = []
@@ -14,9 +33,13 @@ const createSurfaceParticles = (scene, density, surfaceJitter, palette = default
 
   if (!scene) {
     return {
-      positions: new Float32Array(),
+      count: 0,
+      textureSize: 1,
       basePositions: new Float32Array(),
-      offsets: new Float32Array(),
+      colors: new Float32Array(),
+      uvs: new Float32Array(),
+      baseData: new Float32Array(4),
+      dirData: new Float32Array(4),
     }
   }
 
@@ -38,25 +61,31 @@ const createSurfaceParticles = (scene, density, surfaceJitter, palette = default
 
   if (!meshes.length || totalWeight === 0) {
     return {
-      positions: new Float32Array(),
+      count: 0,
+      textureSize: 1,
       basePositions: new Float32Array(),
-      offsets: new Float32Array(),
+      colors: new Float32Array(),
+      uvs: new Float32Array(),
+      baseData: new Float32Array(4),
+      dirData: new Float32Array(4),
     }
   }
 
   const densityFactor = Math.max(0.1, density)
-  const targetCount = Math.max(400, Math.floor(totalWeight * densityFactor))
-  const positions = new Float32Array(targetCount * 3)
-  const basePositions = new Float32Array(targetCount * 3)
-  const offsets = new Float32Array(targetCount)
-  const colors = new Float32Array(targetCount * 3)
-  const dirs = new Float32Array(targetCount * 3)
+  const count = Math.max(400, Math.floor(totalWeight * densityFactor))
+
+  const basePositions = new Float32Array(count * 3)
+  const offsets = new Float32Array(count)
+  const colors = new Float32Array(count * 3)
+  const dirs = new Float32Array(count * 3)
+  let maxRadius = 0
+
   const center = new Vector3()
   const position = new Vector3()
   const normal = new Vector3()
   const paletteColors = (palette && palette.length ? palette : defaultPalette).map((c) => new Color(c))
 
-  for (let i = 0; i < targetCount; i++) {
+  for (let i = 0; i < count; i++) {
     let r = Math.random() * totalWeight
     let selected = meshes[0]
     for (let j = 0; j < meshes.length; j++) {
@@ -79,19 +108,17 @@ const createSurfaceParticles = (scene, density, surfaceJitter, palette = default
     center.add(position)
 
     const index = i * 3
-    basePositions[index] = positions[index] = position.x
-    basePositions[index + 1] = positions[index + 1] = position.y
-    basePositions[index + 2] = positions[index + 2] = position.z
+    basePositions[index] = position.x
+    basePositions[index + 1] = position.y
+    basePositions[index + 2] = position.z
     offsets[i] = Math.random() * Math.PI * 2
 
-    // Base color per-point from palette with slight random brightness variation
-    const pc = paletteColors[i % paletteColors.length] || new Color('#ffffff')
-    const temp = pc.clone().multiplyScalar(0.7 + Math.random() * 0.6)
+    const paletteColor = paletteColors[i % paletteColors.length] || new Color('#ffffff')
+    const temp = paletteColor.clone().multiplyScalar(0.7 + Math.random() * 0.6)
     colors[index] = temp.r
     colors[index + 1] = temp.g
     colors[index + 2] = temp.b
 
-    // random direction per point (unit sphere)
     const theta = Math.random() * Math.PI * 2
     const phi = Math.acos(2 * Math.random() - 1)
     const dx = Math.sin(phi) * Math.cos(theta)
@@ -102,19 +129,72 @@ const createSurfaceParticles = (scene, density, surfaceJitter, palette = default
     dirs[index + 2] = dz
   }
 
-  center.divideScalar(targetCount)
+  center.divideScalar(count)
 
-  for (let i = 0; i < targetCount; i++) {
+  for (let i = 0; i < count; i++) {
     const index = i * 3
     basePositions[index] -= center.x
     basePositions[index + 1] -= center.y
     basePositions[index + 2] -= center.z
-    positions[index] -= center.x
-    positions[index + 1] -= center.y
-    positions[index + 2] -= center.z
+
+    const len = Math.hypot(basePositions[index], basePositions[index + 1], basePositions[index + 2])
+    if (len > maxRadius) maxRadius = len
   }
 
-  return { positions, basePositions, offsets, colors, dirs }
+  const textureSize = getTextureSize(count)
+  const texelCount = textureSize * textureSize
+  const baseData = new Float32Array(texelCount * 4)
+  const dirData = new Float32Array(texelCount * 4)
+  const sphereData = new Float32Array(texelCount * 4)
+  const uvs = new Float32Array(count * 2)
+
+  const sphereRadius = maxRadius > 0 ? maxRadius * 1.05 : 1
+
+  for (let i = 0; i < count; i++) {
+    const index3 = i * 3
+    const index4 = i * 4
+    baseData[index4] = basePositions[index3]
+    baseData[index4 + 1] = basePositions[index3 + 1]
+    baseData[index4 + 2] = basePositions[index3 + 2]
+    baseData[index4 + 3] = offsets[i]
+
+    dirData[index4] = dirs[index3]
+    dirData[index4 + 1] = dirs[index3 + 1]
+    dirData[index4 + 2] = dirs[index3 + 2]
+    dirData[index4 + 3] = 0
+
+    const randTheta = Math.random() * Math.PI * 2
+    const randPhi = Math.acos(2 * Math.random() - 1)
+    const randRadius = sphereRadius * (0.55 + 0.45 * Math.cbrt(Math.random()))
+    const sx = Math.sin(randPhi) * Math.cos(randTheta)
+    const sy = Math.sin(randPhi) * Math.sin(randTheta)
+    const sz = Math.cos(randPhi)
+
+    sphereData[index4] = sx * randRadius
+    sphereData[index4 + 1] = sy * randRadius
+    sphereData[index4 + 2] = sz * randRadius
+    sphereData[index4 + 3] = offsets[i]
+
+    const x = i % textureSize
+    const y = Math.floor(i / textureSize)
+    uvs[i * 2] = (x + 0.5) / textureSize
+    uvs[i * 2 + 1] = (y + 0.5) / textureSize
+  }
+
+  // Unused texels stay zeroed out
+
+  return { count, textureSize, basePositions, colors, uvs, baseData, dirData, sphereData }
+}
+
+const createDataTexture = (data, size) => {
+  const texture = new DataTexture(data, size, size, RGBAFormat, FloatType)
+  texture.needsUpdate = true
+  texture.magFilter = NearestFilter
+  texture.minFilter = NearestFilter
+  texture.wrapS = ClampToEdgeWrapping
+  texture.wrapT = ClampToEdgeWrapping
+  texture.flipY = false
+  return texture
 }
 
 export function DogParticles({
@@ -126,72 +206,115 @@ export function DogParticles({
   colorIntensity = 0.35,
   breatheAmplitude = 0.08,
   rotationSpeed = 0.25,
-  wobbleFrequency = 1.6,
-  surfaceJitter = 0,
+  wobbleFrequency = 1.7,
+  surfaceJitter = 0.05,
   ...props
 }) {
   const group = useRef()
   const pointsRef = useRef()
   const { scene } = useGLTF('/A.glb')
 
-  const { positions, basePositions, offsets, colors, dirs } = useMemo(
+  const { count, textureSize, basePositions, colors, uvs, baseData, dirData, sphereData } = useMemo(
     () => createSurfaceParticles(scene, density, surfaceJitter, palette),
     [scene, density, surfaceJitter, palette],
   )
 
-  // (Re)build geometry attributes whenever data changes
-  useEffect(() => {
-    const pts = pointsRef.current
-    if (!pts) return
-    const geom = pts.geometry
-    if (!geom) return
-    geom.setAttribute('position', new BufferAttribute(positions, 3))
-    geom.setAttribute('aBase', new BufferAttribute(basePositions, 3))
-    geom.setAttribute('aPhase', new BufferAttribute(offsets, 1))
-    geom.setAttribute('aDir', new BufferAttribute(dirs, 3))
-    geom.setAttribute('aColor', new BufferAttribute(colors, 3))
-    geom.computeBoundingSphere()
-  }, [positions, basePositions, offsets, dirs, colors])
+  const baseTexture = useMemo(() => createDataTexture(baseData, textureSize), [baseData, textureSize])
+  const dirTexture = useMemo(() => createDataTexture(dirData, textureSize), [dirData, textureSize])
+  const sphereTexture = useMemo(() => createDataTexture(sphereData, textureSize), [sphereData, textureSize])
 
-  // Shader material for round glowing particles
-  const shaderMat = useMemo(() => {
-    const mat = new ShaderMaterial({
+  useEffect(() => () => baseTexture.dispose(), [baseTexture])
+  useEffect(() => () => dirTexture.dispose(), [dirTexture])
+  useEffect(() => () => sphereTexture.dispose(), [sphereTexture])
+
+  const simulationMaterial = useMemo(
+    () =>
+      new ShaderMaterial({
+        depthWrite: false,
+        uniforms: {
+          uSourceMap: { value: null },
+          uTargetMap: { value: null },
+          uDirMap: { value: null },
+          uTime: { value: 0 },
+          uMorphProgress: { value: 0 },
+          uBreatheAmplitude: { value: breatheAmplitude },
+          uWobbleFrequency: { value: wobbleFrequency },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+          }
+        `,
+        fragmentShader: `
+          varying vec2 vUv;
+          uniform sampler2D uSourceMap;
+          uniform sampler2D uTargetMap;
+          uniform sampler2D uDirMap;
+          uniform float uTime;
+          uniform float uMorphProgress;
+          uniform float uBreatheAmplitude;
+          uniform float uWobbleFrequency;
+
+          void main() {
+            vec4 source = texture2D(uSourceMap, vUv);
+            vec4 target = texture2D(uTargetMap, vUv);
+            vec3 dir = texture2D(uDirMap, vUv).xyz;
+            float phase = mix(source.w, target.w, uMorphProgress);
+            vec3 basePos = mix(source.xyz, target.xyz, uMorphProgress);
+            float s = sin(uTime * uWobbleFrequency + phase);
+            vec3 displaced = basePos + dir * (s * uBreatheAmplitude * 0.6);
+            gl_FragColor = vec4(displaced, phase);
+          }
+        `,
+      }),
+    [],
+  )
+
+  const pointsMaterial = useMemo(
+    () =>
+      new ShaderMaterial({
         transparent: true,
         depthWrite: false,
         blending: AdditiveBlending,
         uniforms: {
           uTime: { value: 0 },
           uPointSize: { value: pointSize },
-          uBreatheAmplitude: { value: breatheAmplitude },
-          uWobbleFrequency: { value: wobbleFrequency },
           uColorIntensity: { value: colorIntensity },
           uColorShiftSpeed: { value: colorShiftSpeed },
+          uPositionTexture: { value: null },
+          uTint: { value: new Color(color) },
+          uUseTint: { value: 1 },
         },
         vertexShader: `
-          varying vec3 vColor;
-          attribute vec3 aBase;
-          attribute float aPhase;
-          attribute vec3 aDir;
+          attribute vec2 aUv;
           attribute vec3 aColor;
+          varying vec3 vColor;
+          uniform sampler2D uPositionTexture;
           uniform float uTime;
           uniform float uPointSize;
-          uniform float uBreatheAmplitude;
-          uniform float uWobbleFrequency;
           uniform float uColorIntensity;
           uniform float uColorShiftSpeed;
+          uniform vec3 uTint;
+          uniform float uUseTint;
 
           void main() {
-            float s = sin(uTime * uWobbleFrequency + aPhase);
-            vec3 displaced = aBase + aDir * (s * uBreatheAmplitude * 0.6);
-            vec4 mvPosition = modelViewMatrix * vec4(displaced, 1.0);
+            vec4 posData = texture2D(uPositionTexture, aUv);
+            vec3 pos = posData.xyz;
+            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPosition;
 
-            // interpret uPointSize similar to R3F size (world units) with attenuation
             float scale = (uPointSize * 1200.0) / max(1.0, -mvPosition.z);
-            gl_PointSize = clamp(scale, 2.5, 80.0);
+            gl_PointSize = clamp(scale, 2.5, 120.0);
 
-            float pulse = 1.0 - uColorIntensity + abs(sin(uTime * uColorShiftSpeed + aPhase)) * uColorIntensity;
-            vColor = aColor * pulse;
+            float phase = posData.w;
+            float pulse = 1.0 - uColorIntensity + abs(sin(uTime * uColorShiftSpeed + phase)) * uColorIntensity;
+            vec3 paletteColor = aColor;
+            if (uUseTint > 0.5) {
+              paletteColor *= uTint;
+            }
+            vColor = paletteColor * pulse;
           }
         `,
         fragmentShader: `
@@ -206,30 +329,110 @@ export function DogParticles({
             gl_FragColor = vec4(col, alpha);
           }
         `,
-      })
-    return mat
-  }, [pointSize, breatheAmplitude, wobbleFrequency, colorIntensity, colorShiftSpeed])
+      }),
+    [],
+  )
+
+  useEffect(() => () => simulationMaterial.dispose(), [simulationMaterial])
+  useEffect(() => () => pointsMaterial.dispose(), [pointsMaterial])
 
   useEffect(() => {
-    return () => {
-      shaderMat?.dispose()
-    }
-  }, [shaderMat])
+    simulationMaterial.uniforms.uTargetMap.value = baseTexture
+  }, [baseTexture, simulationMaterial])
 
-  useFrame(({ clock }, delta) => {
+  useEffect(() => {
+    simulationMaterial.uniforms.uDirMap.value = dirTexture
+  }, [dirTexture, simulationMaterial])
+
+  useEffect(() => {
+    simulationMaterial.uniforms.uSourceMap.value = sphereTexture
+    pointsMaterial.uniforms.uPositionTexture.value = sphereTexture
+  }, [simulationMaterial, pointsMaterial, sphereTexture])
+
+  useEffect(() => {
+    simulationMaterial.uniforms.uBreatheAmplitude.value = breatheAmplitude
+  }, [simulationMaterial, breatheAmplitude])
+
+  useEffect(() => {
+    simulationMaterial.uniforms.uWobbleFrequency.value = wobbleFrequency
+  }, [simulationMaterial, wobbleFrequency])
+
+  useEffect(() => {
+    pointsMaterial.uniforms.uPointSize.value = pointSize
+  }, [pointsMaterial, pointSize])
+
+  useEffect(() => {
+    pointsMaterial.uniforms.uColorIntensity.value = colorIntensity
+  }, [pointsMaterial, colorIntensity])
+
+  useEffect(() => {
+    pointsMaterial.uniforms.uColorShiftSpeed.value = colorShiftSpeed
+  }, [pointsMaterial, colorShiftSpeed])
+
+  useEffect(() => {
+    pointsMaterial.uniforms.uTint.value.set(color)
+  }, [pointsMaterial, color])
+
+  useEffect(() => {
+    pointsMaterial.uniforms.uUseTint.value = palette && palette.length > 1 ? 0 : 1
+  }, [pointsMaterial, palette])
+
+  useEffect(() => {
+    const pts = pointsRef.current
+    if (!pts) return
+    const geom = pts.geometry
+    geom.setAttribute('position', new BufferAttribute(basePositions, 3))
+    geom.setAttribute('aUv', new BufferAttribute(uvs, 2))
+    geom.setAttribute('aColor', new BufferAttribute(colors, 3))
+    geom.computeBoundingSphere()
+  }, [basePositions, uvs, colors, count])
+
+  const simulationTarget = useFBO(textureSize, textureSize, {
+    type: FloatType,
+    format: RGBAFormat,
+    minFilter: NearestFilter,
+    magFilter: NearestFilter,
+    depthBuffer: false,
+  })
+
+  const simulationScene = useMemo(() => {
+    const sceneObj = new Scene()
+    const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    const quad = new Mesh(new PlaneGeometry(2, 2), simulationMaterial)
+    sceneObj.add(quad)
+    return { scene: sceneObj, camera, quad }
+  }, [simulationMaterial])
+
+  useEffect(() => () => simulationScene.quad.geometry.dispose(), [simulationScene])
+
+  const morphDuration = 10
+
+  useFrame(({ gl, clock }, delta) => {
+    if (!baseTexture || !dirTexture || count === 0) return
+
     if (group.current) {
       group.current.rotation.y += delta * rotationSpeed
-      // group.current.rotation.x = MathUtils.lerp(group.current.rotation.x, Math.sin(clock.elapsedTime * 0.3) * 0.25, 0.05)
+      group.current.rotation.x = MathUtils.lerp(group.current.rotation.x, Math.sin(clock.elapsedTime * 0.3) * 0.25, 0.05)
     }
-    if (shaderMat) shaderMat.uniforms.uTime.value = clock.elapsedTime
+
+    const elapsed = clock.elapsedTime
+    simulationMaterial.uniforms.uTime.value = elapsed
+    simulationMaterial.uniforms.uMorphProgress.value = Math.min(elapsed / morphDuration, 1)
+
+    gl.setRenderTarget(simulationTarget)
+    gl.render(simulationScene.scene, simulationScene.camera)
+    gl.setRenderTarget(null)
+
+    pointsMaterial.uniforms.uTime.value = elapsed
+    pointsMaterial.uniforms.uPositionTexture.value = simulationTarget.texture
   })
 
   return (
     <group ref={group} {...props}>
-      <points ref={pointsRef} frustumCulled={false} key={`points-${positions.length}`}>
+      <points ref={pointsRef} key={`particles-${count}`} frustumCulled={false}>
         <bufferGeometry attach='geometry' />
         {/* @ts-ignore */}
-        <primitive object={shaderMat} attach='material' />
+        <primitive object={pointsMaterial} attach='material' />
       </points>
     </group>
   )
