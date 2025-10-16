@@ -30,15 +30,15 @@ export default function Page() {
     'Particles',
     {
       density: {
-        value: 1.9,
+        value: 2.6,
         min: 0.25,
-        max: 6,
+        max: 12,
         step: 0.25,
       },
       pointSize: {
-        value: 0.02,
-        min: 0.005,
-        max: 0.06,
+        value: 0.035,
+        min: 0.01,
+        max: 0.12,
         step: 0.0025,
       },
       breatheAmplitude: {
@@ -83,7 +83,7 @@ export default function Page() {
               rotationSpeed={rotationSpeed}
               wobbleFrequency={wobbleFrequency}
               surfaceJitter={surfaceJitter}
-              scale={1}
+              scale={2}
             />
             <Common color='#000000' />
           </Suspense>
