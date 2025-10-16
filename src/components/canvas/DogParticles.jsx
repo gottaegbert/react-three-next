@@ -107,7 +107,7 @@ export function DogParticles({
 }) {
   const group = useRef()
   const pointsRef = useRef()
-  const { scene } = useGLTF('/human.glb')
+  const { scene } = useGLTF('/astronaut.glb')
 
   const { positions, basePositions, offsets } = useMemo(
     () => createSurfaceParticles(scene, density, surfaceJitter),
@@ -143,7 +143,7 @@ export function DogParticles({
 
   return (
     <group ref={group} {...props}>
-      <Points ref={pointsRef} positions={positions} stride={3} frustumCulled={false}>
+      <Points key={positions.length} ref={pointsRef} positions={positions} stride={3} frustumCulled={false}>
         <PointMaterial
           transparent
           color={color}
@@ -158,4 +158,4 @@ export function DogParticles({
   )
 }
 
-useGLTF.preload('/human.glb')
+useGLTF.preload('/astronaut.glb')

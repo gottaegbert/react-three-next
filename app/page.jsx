@@ -73,7 +73,7 @@ export default function Page() {
     <main className='relative min-h-screen w-full overflow-hidden bg-black text-white'>
       <Leva collapsed />
       <div className='relative flex min-h-screen w-full items-center justify-center px-4 py-12'>
-        <View className='relative h-[70vh] w-full max-w-5xl'>
+        <View className='relative h-screen w-full max-w-5xl' orbit>
           <Suspense fallback={null}>
             <DogParticles
               density={density}
@@ -83,7 +83,7 @@ export default function Page() {
               rotationSpeed={rotationSpeed}
               wobbleFrequency={wobbleFrequency}
               surfaceJitter={surfaceJitter}
-              scale={2}
+              scale={1}
             />
             <Common color='#000000' />
           </Suspense>
