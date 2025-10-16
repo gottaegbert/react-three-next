@@ -4,6 +4,7 @@
 import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
 import { Leva, useControls } from 'leva'
+import { HeaderRail } from '@/components/dom/HeaderRail'
 
 const DogParticles = dynamic(() => import('@/components/canvas/DogParticles').then((mod) => mod.DogParticles), {
   ssr: false,
@@ -42,13 +43,13 @@ export default function Page() {
     'Particles',
     {
       density: {
-        value: 2.6,
+        value: 8.5,
         min: 0.25,
         max: 12,
         step: 0.25,
       },
       pointSize: {
-        value: 0.035,
+        value: 0.01,
         min: 0.01,
         max: 0.12,
         step: 0.0025,
@@ -105,11 +106,14 @@ export default function Page() {
     },
   )
 
+  const navItems = ['About', 'Biography', 'Contact']
+
   return (
     <main className='relative min-h-screen w-full overflow-hidden bg-black text-white'>
       <Leva collapsed />
-      <div className='relative flex min-h-screen w-full items-center justify-center px-4 py-12'>
-        <View className='relative h-screen w-full max-w-5xl' orbit>
+
+      <div className='relative h-screen w-full'>
+        <View className='absolute inset-0 size-full' orbit>
           <Suspense fallback={null}>
             <DogParticles
               density={density}
@@ -128,6 +132,8 @@ export default function Page() {
             <Common color='#000000' />
           </Suspense>
         </View>
+
+        <HeaderRail name='Ranbir' subtitle='Contemporary Artist' navItems={navItems} />
       </div>
     </main>
   )

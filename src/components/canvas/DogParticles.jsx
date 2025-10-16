@@ -72,7 +72,7 @@ const createSurfaceParticles = (scene, density, surfaceJitter, palette = default
   }
 
   const densityFactor = Math.max(0.1, density)
-  const count = Math.max(400, Math.floor(totalWeight * densityFactor))
+  const count = Math.max(3200, Math.floor(totalWeight * densityFactor))
 
   const basePositions = new Float32Array(count * 3)
   const offsets = new Float32Array(count)
@@ -198,8 +198,8 @@ const createDataTexture = (data, size) => {
 }
 
 export function DogParticles({
-  density = 1.9,
-  pointSize = 0.035,
+  density = 8.5,
+  pointSize = 0.01,
   color = '#f7c873',
   palette = defaultPalette,
   colorShiftSpeed = 0.8,
@@ -216,6 +216,8 @@ export function DogParticles({
   const group = useRef()
   const pointsRef = useRef()
   const { scene } = useGLTF('/A.glb')
+    // const { scene } = useGLTF('/astronaut.glb')
+
 
   const { count, textureSize, basePositions, colors, uvs, baseData, dirData, sphereData } = useMemo(
     () => createSurfaceParticles(scene, density, surfaceJitter, palette),
@@ -334,7 +336,7 @@ export function DogParticles({
             vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPosition;
 
-            float scale = (uPointSize * 1200.0) / max(1.0, -mvPosition.z);
+            float scale = (uPointSize * 3200.0) / max(1.0, -mvPosition.z);
             gl_PointSize = clamp(scale, 2.5, 120.0);
 
             float phase = posData.w;
