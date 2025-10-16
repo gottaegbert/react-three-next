@@ -12,7 +12,7 @@ A minimalist starter for NextJS, @react-three/fiber and Threejs.
 
 This starter allows you to navigate seamlessly between pages with dynamic dom and/or canvas content without reloading or creating a new canvas every time. 3D components are usable anywhere in the dom. The events, dom, viewport, everything is synchronized!
 
-### ⚫ Demo :
+### ⚫ Demo
 
 [![image](https://user-images.githubusercontent.com/15867665/231395343-fd4770e3-0e39-4f5c-ac30-71d823a9ef1c.png)](https://react-three-next.vercel.app/)
 
@@ -75,13 +75,31 @@ Thanks to [tunnel-rat](https://github.com/pmndrs/tunnel-rat) the starter can por
 - [`@react-three/a11y` - Optional](https://github.com/pmndrs/react-three-a11y/) &ndash; Accessibility tools for React Three Fiber
 - [`r3f-perf` - Optional](https://github.com/RenaudRohlinger/r3f-perf) &ndash; Tool to easily monitor react threejs performances.
 
-### How to contribute :
+### How to contribute
 
 ```bash
 git clone https://github.com/pmndrs/react-three-next
 && cd react-three-next && yarn install
 ```
 
-### Maintainers :
+### Maintainers
 
 - [`twitter 🐈‍⬛ @onirenaud`](https://twitter.com/onirenaud)
+
+• Project Layout
+
+- app/layout.jsx:9 wraps every page with Layout, which keeps the shared
+    <Canvas> alive between routes so 3D state persists.
+- app/page.jsx:7 shows the pattern for dynamically importing canvas
+    components and mounting them in a <View> that binds a DOM div to the
+    shared canvas.
+- src/components/canvas/View.jsx:17 defines the <View> helper (with
+    optional orbit controls) and the Common lighting rig you can reuse
+    or replace.
+- src/components/canvas/Scene.jsx:8 hosts the single @react-three/fiber
+    <Canvas> instance that renders everything you portal through r3f.Out.
+- src/components/canvas/Examples.jsx:33 illustrates how GLTF models,
+    interactivity, and animation hooks fit into the system; drop your own
+    components alongside these.
+- Put static assets (GLBs, textures, HDRs) in public/ so you can load
+    them with /asset.glb.
