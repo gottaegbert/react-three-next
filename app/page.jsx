@@ -2,9 +2,18 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Suspense } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { Leva, useControls } from 'leva'
-import { HeaderRail } from '@/components/dom/HeaderRail'
+import { cn } from '@/lib/utils'
+
+const modelOptions = [
+  { id: 'B2', label: 'Sculpture B2', url: '/B2.glb' },
+  { id: 'B', label: 'Sculpture B', url: '/B.glb' },
+  { id: 'astronaut', label: 'Astronaut', url: '/astronaut.glb' },
+  { id: 'dog', label: 'Dog', url: '/dog.glb' },
+  { id: 'duck', label: 'Duck', url: '/duck.glb' },
+  { id: 'human', label: 'Human', url: '/human.glb' },
+]
 
 const DogParticles = dynamic(() => import('@/components/canvas/DogParticles').then((mod) => mod.DogParticles), {
   ssr: false,
@@ -106,16 +115,136 @@ export default function Page() {
     },
   )
 
-  const navItems = ['About', 'Biography', 'Contact']
+  const [modelUrl, setModelUrl] = useState(modelOptions[0].url)
+  const [selectedModelId, setSelectedModelId] = useState(modelOptions[0].id)
+  const [uploadedUrl, setUploadedUrl] = useState(null)
+  const [uploadedName, setUploadedName] = useState('')
+  const [uploadError, setUploadError] = useState('')
+  const [showModel, setShowModel] = useState(false)
+
+  useEffect(() => () => {
+    if (uploadedUrl) {
+      URL.revokeObjectURL(uploadedUrl)
+    }
+  }, [uploadedUrl])
+
+  const currentModelLabel = useMemo(() => {
+    if (selectedModelId === 'upload' && uploadedName) {
+      return uploadedName
+    }
+    const match = modelOptions.find((option) => option.id === selectedModelId)
+    return match ? match.label : 'Custom Model'
+  }, [selectedModelId, uploadedName])
+
+  const handleSampleSelect = (option) => {
+    if (!option) return
+    if (uploadedUrl) {
+      URL.revokeObjectURL(uploadedUrl)
+      setUploadedUrl(null)
+      setUploadedName('')
+    }
+    setUploadError('')
+    setModelUrl(option.url)
+    setSelectedModelId(option.id)
+  }
+
+  const handleUpload = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 3 * 1024 * 1024) {
+      setUploadError('File too large. Please choose a GLTF/GLB model under 3MB.')
+      event.target.value = ''
+      return
+    }
+
+    const objectUrl = URL.createObjectURL(file)
+    if (uploadedUrl) {
+      URL.revokeObjectURL(uploadedUrl)
+    }
+    setUploadedUrl(objectUrl)
+    setUploadedName(file.name)
+    setModelUrl(objectUrl)
+    setSelectedModelId('upload')
+    setUploadError('')
+    event.target.value = ''
+  }
 
   return (
     <main className='relative min-h-screen w-full overflow-hidden bg-black text-white'>
       <Leva collapsed />
 
       <div className='relative h-screen w-full'>
+        <div className='pointer-events-none fixed inset-x-0 top-6 z-30 flex justify-center px-4 sm:justify-start sm:px-6'>
+          <div className='pointer-events-auto w-full max-w-4xl rounded-3xl border border-white/15 bg-black/70 p-4 shadow-lg backdrop-blur-xl'>
+            <div className='flex flex-col gap-4'>
+              <div>
+                <p className='text-[11px] font-semibold uppercase tracking-[0.32em] text-white/60'>Examples</p>
+                <p className='mt-0.5 text-[10px] uppercase tracking-[0.24em] text-white/35'>
+                  Current Model: {currentModelLabel}
+                </p>
+              </div>
+              <div className='-m-1 flex flex-wrap items-center gap-2 overflow-hidden'>
+                <div className='flex flex-1 flex-wrap items-center gap-2'>
+                  {modelOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type='button'
+                    onClick={() => handleSampleSelect(option)}
+                    className={cn(
+                      'rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
+                      selectedModelId === option.id
+                        ? 'border-white bg-white text-black hover:bg-white/90 hover:text-black'
+                        : 'border-white/18 text-white/65 hover:bg-white/10 hover:text-white',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                </div>
+              </div>
+              <div className='flex flex-wrap items-center gap-3'>
+                <button
+                  type='button'
+                  onClick={() => setShowModel((prev) => !prev)}
+                  className={cn(
+                    'rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
+                    showModel
+                      ? 'border-white bg-white text-black hover:bg-white/90'
+                      : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/20 hover:text-white',
+                  )}
+                >
+                  {showModel ? 'Hide Mesh' : 'Show Mesh'}
+                </button>
+                <label className='inline-flex cursor-pointer items-center rounded-full border border-dashed border-white/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70 transition hover:border-white/45 hover:text-white sm:text-[11px]'>
+                  Upload Model
+                  <input
+                    type='file'
+                    accept='.glb,.gltf,model/gltf-binary,model/gltf+json'
+                    className='hidden'
+                    onChange={handleUpload}
+                  />
+                </label>
+                <span className='text-[10px] uppercase tracking-[0.24em] text-white/40 sm:text-[11px]'>
+                  Supports GLB/GLTF · Max 3MB
+                </span>
+                {selectedModelId === 'upload' && uploadedName ? (
+                  <span className='rounded-full border border-white/15 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/60 sm:text-[11px]'>
+                    {uploadedName}
+                  </span>
+                ) : null}
+              </div>
+              {uploadError ? (
+                <p className='text-[10px] font-semibold uppercase tracking-[0.24em] text-red-300'>{uploadError}</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
         <View className='absolute inset-0 size-full' orbit>
           <Suspense fallback={null}>
             <DogParticles
+              key={modelUrl}
               density={density}
               pointSize={pointSize}
               color={color}
@@ -128,12 +257,13 @@ export default function Page() {
               flowStrength={flowStrength}
               morphDuration={morphDuration}
               scale={2}
+              modelUrl={modelUrl}
+              showModel={showModel}
             />
             <Common color='#000000' />
           </Suspense>
         </View>
 
-        <HeaderRail name='Ranbir' subtitle='Contemporary Artist' navItems={navItems} />
       </div>
     </main>
   )

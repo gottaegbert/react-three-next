@@ -20,6 +20,7 @@ import {
   OrthographicCamera,
   Mesh,
   PlaneGeometry,
+  MeshStandardMaterial,
 } from 'three'
 import { MeshSurfaceSampler } from 'three-stdlib'
 
@@ -40,6 +41,7 @@ const createSurfaceParticles = (scene, density, surfaceJitter, palette = default
       uvs: new Float32Array(),
       baseData: new Float32Array(4),
       dirData: new Float32Array(4),
+      center: new Vector3(),
     }
   }
 
@@ -68,6 +70,7 @@ const createSurfaceParticles = (scene, density, surfaceJitter, palette = default
       uvs: new Float32Array(),
       baseData: new Float32Array(4),
       dirData: new Float32Array(4),
+      center: new Vector3(),
     }
   }
 
@@ -183,7 +186,7 @@ const createSurfaceParticles = (scene, density, surfaceJitter, palette = default
 
   // Unused texels stay zeroed out
 
-  return { count, textureSize, basePositions, colors, uvs, baseData, dirData, sphereData }
+  return { count, textureSize, basePositions, colors, uvs, baseData, dirData, sphereData, center }
 }
 
 const createDataTexture = (data, size) => {
@@ -200,7 +203,7 @@ const createDataTexture = (data, size) => {
 export function DogParticles({
   density = 8.5,
   pointSize = 0.01,
-  color = '#f7c873',
+  color = '#d4af37',
   palette = defaultPalette,
   colorShiftSpeed = 0.8,
   colorIntensity = 0.35,
@@ -211,15 +214,18 @@ export function DogParticles({
   forceStrength = 0.6,
   forceFrequency = 0.45,
   flowStrength = 0.25,
+  morphDuration = 10,
+  showModel = true,
+  modelUrl = '/B2.glb',
   ...props
 }) {
   const group = useRef()
   const pointsRef = useRef()
-  const { scene } = useGLTF('/A.glb')
-    // const { scene } = useGLTF('/astronaut.glb')
+  const morphStartRef = useRef(null)
+  const resolvedUrl = modelUrl || '/B2.glb'
+  const { scene } = useGLTF(resolvedUrl)
 
-
-  const { count, textureSize, basePositions, colors, uvs, baseData, dirData, sphereData } = useMemo(
+  const { count, textureSize, basePositions, colors, uvs, baseData, dirData, sphereData, center } = useMemo(
     () => createSurfaceParticles(scene, density, surfaceJitter, palette),
     [scene, density, surfaceJitter, palette],
   )
@@ -231,6 +237,38 @@ export function DogParticles({
   useEffect(() => () => baseTexture.dispose(), [baseTexture])
   useEffect(() => () => dirTexture.dispose(), [dirTexture])
   useEffect(() => () => sphereTexture.dispose(), [sphereTexture])
+
+  const model = useMemo(() => {
+    if (!scene) return null
+
+    const baseColor = new Color('#101015')
+    const goldColor = new Color('#d4af37')
+
+    const clone = scene.clone(true)
+    let meshIndex = 0
+    clone.traverse((child) => {
+      if (!child.isMesh) return
+      child.castShadow = true
+      child.receiveShadow = true
+      if (Array.isArray(child.material)) {
+        child.material.forEach((mat) => mat?.dispose?.())
+      } else {
+        child.material?.dispose?.()
+      }
+      const material = new MeshStandardMaterial({
+        color: baseColor.clone().lerp(goldColor, meshIndex % 2 === 0 ? 0.35 : 0.55),
+        metalness: 0.88,
+        roughness: 0.28,
+      })
+      material.emissive.copy(goldColor)
+      material.emissiveIntensity = meshIndex % 2 === 0 ? 0.12 : 0.2
+      child.material = material
+      meshIndex += 1
+    })
+
+    clone.position.set(-center.x, -center.y, -center.z)
+    return clone
+  }, [center, scene])
 
   const simulationMaterial = useMemo(
     () =>
@@ -381,6 +419,10 @@ export function DogParticles({
   }, [simulationMaterial, pointsMaterial, sphereTexture])
 
   useEffect(() => {
+    morphStartRef.current = null
+  }, [baseTexture])
+
+  useEffect(() => {
     simulationMaterial.uniforms.uBreatheAmplitude.value = breatheAmplitude
   }, [simulationMaterial, breatheAmplitude])
 
@@ -448,10 +490,11 @@ export function DogParticles({
 
   useEffect(() => () => simulationScene.quad.geometry.dispose(), [simulationScene])
 
-  const morphDuration = 10
-
   useFrame(({ gl, clock }, delta) => {
     if (!baseTexture || !dirTexture || count === 0) return
+    if (morphStartRef.current === null) {
+      morphStartRef.current = clock.elapsedTime
+    }
 
     if (group.current) {
       group.current.rotation.y += delta * rotationSpeed
@@ -460,7 +503,8 @@ export function DogParticles({
 
     const elapsed = clock.elapsedTime
     simulationMaterial.uniforms.uTime.value = elapsed
-    simulationMaterial.uniforms.uMorphProgress.value = Math.min(elapsed / Math.max(0.001, morphDuration), 1)
+    const morphElapsed = elapsed - (morphStartRef.current ?? elapsed)
+    simulationMaterial.uniforms.uMorphProgress.value = Math.min(morphElapsed / Math.max(0.001, morphDuration), 1)
 
     gl.setRenderTarget(simulationTarget)
     gl.render(simulationScene.scene, simulationScene.camera)
@@ -472,6 +516,10 @@ export function DogParticles({
 
   return (
     <group ref={group} {...props}>
+      <ambientLight intensity={0.2} color='#0d0d12' />
+      <directionalLight position={[6, 8, 6]} intensity={1.2} color='#f5c46d' castShadow />
+      <directionalLight position={[-4, -3, -5]} intensity={0.5} color='#c79f3a' />
+      {model && showModel && <primitive object={model} dispose={null} />}
       <points ref={pointsRef} key={`particles-${count}`} frustumCulled={false}>
         <bufferGeometry attach='geometry' />
         {/* @ts-ignore */}
@@ -481,4 +529,9 @@ export function DogParticles({
   )
 }
 
-useGLTF.preload('/A.glb')
+useGLTF.preload('/B2.glb')
+useGLTF.preload('/B.glb')
+useGLTF.preload('/astronaut.glb')
+useGLTF.preload('/dog.glb')
+useGLTF.preload('/duck.glb')
+useGLTF.preload('/human.glb')
