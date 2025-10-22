@@ -123,6 +123,7 @@ export default function Page() {
   const [uploadError, setUploadError] = useState('')
   const [showModel, setShowModel] = useState(false)
   const [explode, setExplode] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true)
 
   useEffect(() => () => {
     if (uploadedUrl) {
@@ -180,83 +181,128 @@ export default function Page() {
 
       <div className='relative h-screen w-full'>
         <div className='pointer-events-none fixed inset-x-0 top-6 z-30 flex justify-center px-4 sm:justify-start sm:px-6'>
-          <div className='pointer-events-auto w-full max-w-4xl rounded-3xl border border-white/15 bg-black/70 p-4 shadow-lg backdrop-blur-xl'>
-            <div className='flex flex-col gap-4'>
+          <div
+            className={cn(
+              'pointer-events-auto w-full max-w-4xl rounded-3xl border border-white/15 bg-black/70 shadow-lg backdrop-blur-xl transition-all duration-300',
+              panelOpen ? 'p-4' : 'p-3',
+            )}
+          >
+            <div className='flex items-start justify-between gap-3'>
               <div>
                 <p className='text-[11px] font-semibold uppercase tracking-[0.32em] text-white/60'>Examples</p>
                 <p className='mt-0.5 text-[10px] uppercase tracking-[0.24em] text-white/35'>
                   Current Model: {currentModelLabel}
                 </p>
               </div>
-              <div className='-m-1 flex flex-wrap items-center gap-2 overflow-hidden'>
-                <div className='flex flex-1 flex-wrap items-center gap-2'>
-                  {modelOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      type='button'
-                      onClick={() => handleSampleSelect(option)}
-                      className={cn(
-                        ' border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
-                        selectedModelId === option.id
-                          ? 'border-white bg-white text-black hover:bg-white/90 hover:text-black'
-                          : 'border-white/18 text-white/65 hover:bg-white/10 hover:text-white',
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className='flex flex-wrap items-center gap-3'>
-                <button
-                  type='button'
-                  onClick={() => setShowModel((prev) => !prev)}
-                  className={cn(
-                    'rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
-                    showModel
-                      ? 'border-white bg-white text-black hover:bg-white/90'
-                      : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/20 hover:text-white',
-                  )}
-                >
-                  {showModel ? 'Hide Mesh' : 'Show Mesh'}
-                </button>
-                <button
-                  type='button'
-                  onClick={() => setExplode((prev) => !prev)}
-                  className={cn(
-                    'rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
-                    explode
-                      ? 'border-white bg-white text-black hover:bg-white/90'
-                      : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/20 hover:text-white',
-                  )}
-                >
-                  {explode ? 'Assemble🫶' : 'Explode💥'}
-                </button>
+              <button
+                type='button'
+                onClick={() => setPanelOpen((prev) => !prev)}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.28em] transition',
+                  panelOpen
+                    ? 'border-white/25 bg-white/15 text-white hover:bg-white/25'
+                    : 'border-white bg-white text-black hover:bg-white/90',
+                )}
+                aria-expanded={panelOpen}
+              >
+                {panelOpen ? 'Collapse' : 'Expand'}
+              </button>
+            </div>
 
-                <label className='inline-flex cursor-pointer items-center rounded-full border border-dashed border-cyan-400/80 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70 transition hover:border-white/45 hover:text-white sm:text-[11px]'>
-                  Upload GLB Model 🧱
-                  <input
-                    type='file'
-                    accept='.glb,.gltf,model/gltf-binary,model/gltf+json'
-                    className='hidden'
-                    onChange={handleUpload}
-                  />
-                </label>
-                <span className='text-[10px] tracking-[0.24em] text-white/60 sm:text-[11px]'>
-                  Supports GLB/GLTF · Max 3MB
-                </span>
-                <span className='text-[10px] tracking-[0.24em] text-white/60 sm:text-[11px]'>
-                  Download models from  <a className='text-cyan-300' href="https://poly.pizza/explore">poly pizza</a> and upload in here to see it in particles
-                </span>
-                {selectedModelId === 'upload' && uploadedName ? (
-                  <span className='rounded-full border border-white/15 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/60 sm:text-[11px]'>
-                    {uploadedName}
+            <div
+              className={cn(
+                'transition-[max-height,opacity] duration-500 ease-out',
+                panelOpen ? 'max-h-[520px] opacity-100' : 'pointer-events-none max-h-0 opacity-0',
+              )}
+            >
+              <div className='flex flex-col gap-5 pt-3'>
+                <div className='-m-1 flex flex-wrap items-center gap-2 overflow-hidden'>
+                  <div className='flex flex-1 flex-wrap items-center gap-2'>
+                    {modelOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type='button'
+                        onClick={() => handleSampleSelect(option)}
+                        className={cn(
+                          ' border px-2 py-2 text-[10px]  tracking-[0.28em] transition sm:text-[11px]',
+                          selectedModelId === option.id
+                            ? 'border-white bg-white text-black hover:bg-white/90 hover:text-black'
+                            : 'border-white/18 text-white/65 hover:bg-white/10 hover:text-white',
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className='flex flex-wrap items-center gap-3'>
+                  <button
+                    type='button'
+                    onClick={() => setShowModel((prev) => !prev)}
+                    className={cn(
+                      'rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
+                      showModel
+                        ? 'border-white bg-white text-black hover:bg-white/90'
+                        : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/20 hover:text-white',
+                    )}
+                  >
+                    {showModel ? 'Hide Mesh' : 'Show Mesh'}
+                  </button>
+                  <button
+                    type='button'
+                    onClick={() => setExplode((prev) => !prev)}
+                    className={cn(
+                      'rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
+                      explode
+                        ? 'border-white bg-white text-black hover:bg-white/90'
+                        : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/20 hover:text-white',
+                    )}
+                  >
+                    {explode ? 'Assemble🫶' : 'Explode💥'}
+                  </button>
+                  <label className='inline-flex cursor-pointer items-center rounded-full border border-dashed border-cyan-400/80 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70 transition hover:border-white/45 hover:text-white sm:text-[11px]'>
+                    Upload GLB Model 🧱
+                    <input
+                      type='file'
+                      accept='.glb,.gltf,model/gltf-binary,model/gltf+json'
+                      className='hidden'
+                      onChange={handleUpload}
+                    />
+                  </label>
+                  <span className='text-[10px] tracking-[0.24em] text-white/60 sm:text-[11px]'>
+                    Supports GLB/GLTF · Max 3MB
                   </span>
+                  <span className='text-[10px] tracking-[0.24em] text-white/60 sm:text-[11px]'>
+                    Download models from{' '}
+                    <a className='text-cyan-300 underline-offset-4 hover:underline' href='https://poly.pizza/explore'>
+                      poly pizza
+                    </a>{' '}
+                    and upload here to see them in particles
+                  </span>
+                  {selectedModelId === 'upload' && uploadedName ? (
+                    <span className='rounded-full border border-white/15 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/60 sm:text-[11px]'>
+                      {uploadedName}
+                    </span>
+                  ) : null}
+                </div>
+
+                {uploadError ? (
+                  <p className='text-[10px] font-semibold uppercase tracking-[0.24em] text-red-300'>{uploadError}</p>
                 ) : null}
+
+                <p className='text-[10px] uppercase tracking-[0.24em] text-white/50 sm:text-[11px]'>
+                  Made by{' '}
+                  <a
+                    href='https://bento.me/siyuhu'
+                    target='_blank'
+                    rel='noreferrer'
+                    className='text-cyan-300 underline-offset-4 hover:underline'
+                  >
+                    Siyu
+                  </a>
+                </p>
               </div>
-              {uploadError ? (
-                <p className='text-[10px] font-semibold uppercase tracking-[0.24em] text-red-300'>{uploadError}</p>
-              ) : null}
             </div>
           </div>
         </div>
