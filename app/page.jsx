@@ -7,12 +7,13 @@ import { Leva, useControls } from 'leva'
 import { cn } from '@/lib/utils'
 
 const modelOptions = [
-  { id: 'B2', label: 'Sculpture B2', url: '/B2.glb' },
-  { id: 'B', label: 'Sculpture B', url: '/B.glb' },
-  { id: 'astronaut', label: 'Astronaut', url: '/astronaut.glb' },
-  { id: 'dog', label: 'Dog', url: '/dog.glb' },
-  { id: 'duck', label: 'Duck', url: '/duck.glb' },
-  { id: 'human', label: 'Human', url: '/human.glb' },
+  { id: 'B', label: 'Sculpture🗿', url: '/B.glb' },
+  { id: 'pistol', label: 'Pistol🔫', url: '/Pistol.glb' },
+    {id:'AK',label:'AK🔥',url:'/AssaultRifle.glb'},
+  { id: 'astronaut', label: 'Astronaut🧑‍🚀', url: '/astronaut.glb' },
+  { id: 'dog', label: 'Dog🐶', url: '/dog.glb' },
+  { id: 'duck', label: 'Duck🦆', url: '/duck.glb' },
+  { id: 'human', label: 'Human👱', url: '/human.glb' },
 ]
 
 const DogParticles = dynamic(() => import('@/components/canvas/DogParticles').then((mod) => mod.DogParticles), {
@@ -121,6 +122,7 @@ export default function Page() {
   const [uploadedName, setUploadedName] = useState('')
   const [uploadError, setUploadError] = useState('')
   const [showModel, setShowModel] = useState(false)
+  const [explode, setExplode] = useState(false)
 
   useEffect(() => () => {
     if (uploadedUrl) {
@@ -146,6 +148,7 @@ export default function Page() {
     setUploadError('')
     setModelUrl(option.url)
     setSelectedModelId(option.id)
+    setExplode(false)
   }
 
   const handleUpload = (event) => {
@@ -167,6 +170,7 @@ export default function Page() {
     setModelUrl(objectUrl)
     setSelectedModelId('upload')
     setUploadError('')
+    setExplode(false)
     event.target.value = ''
   }
 
@@ -187,20 +191,20 @@ export default function Page() {
               <div className='-m-1 flex flex-wrap items-center gap-2 overflow-hidden'>
                 <div className='flex flex-1 flex-wrap items-center gap-2'>
                   {modelOptions.map((option) => (
-                  <button
-                    key={option.id}
-                    type='button'
-                    onClick={() => handleSampleSelect(option)}
-                    className={cn(
-                      'rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
-                      selectedModelId === option.id
-                        ? 'border-white bg-white text-black hover:bg-white/90 hover:text-black'
-                        : 'border-white/18 text-white/65 hover:bg-white/10 hover:text-white',
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+                    <button
+                      key={option.id}
+                      type='button'
+                      onClick={() => handleSampleSelect(option)}
+                      className={cn(
+                        ' border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
+                        selectedModelId === option.id
+                          ? 'border-white bg-white text-black hover:bg-white/90 hover:text-black'
+                          : 'border-white/18 text-white/65 hover:bg-white/10 hover:text-white',
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className='flex flex-wrap items-center gap-3'>
@@ -216,8 +220,21 @@ export default function Page() {
                 >
                   {showModel ? 'Hide Mesh' : 'Show Mesh'}
                 </button>
-                <label className='inline-flex cursor-pointer items-center rounded-full border border-dashed border-white/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70 transition hover:border-white/45 hover:text-white sm:text-[11px]'>
-                  Upload Model
+                <button
+                  type='button'
+                  onClick={() => setExplode((prev) => !prev)}
+                  className={cn(
+                    'rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition sm:text-[11px]',
+                    explode
+                      ? 'border-white bg-white text-black hover:bg-white/90'
+                      : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/20 hover:text-white',
+                  )}
+                >
+                  {explode ? 'Assemble🫶' : 'Explode💥'}
+                </button>
+
+                <label className='inline-flex cursor-pointer items-center rounded-full border border-dashed border-cyan-400/80 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70 transition hover:border-white/45 hover:text-white sm:text-[11px]'>
+                  Upload GLB Model 🧱
                   <input
                     type='file'
                     accept='.glb,.gltf,model/gltf-binary,model/gltf+json'
@@ -225,8 +242,11 @@ export default function Page() {
                     onChange={handleUpload}
                   />
                 </label>
-                <span className='text-[10px] uppercase tracking-[0.24em] text-white/40 sm:text-[11px]'>
+                <span className='text-[10px] tracking-[0.24em] text-white/60 sm:text-[11px]'>
                   Supports GLB/GLTF · Max 3MB
+                </span>
+                <span className='text-[10px] tracking-[0.24em] text-white/60 sm:text-[11px]'>
+                  Download models from  <a className='text-cyan-300' href="https://poly.pizza/explore">poly pizza</a> and upload in here to see it in particles
                 </span>
                 {selectedModelId === 'upload' && uploadedName ? (
                   <span className='rounded-full border border-white/15 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/60 sm:text-[11px]'>
@@ -244,7 +264,6 @@ export default function Page() {
         <View className='absolute inset-0 size-full' orbit>
           <Suspense fallback={null}>
             <DogParticles
-              key={modelUrl}
               density={density}
               pointSize={pointSize}
               color={color}
@@ -259,6 +278,7 @@ export default function Page() {
               scale={2}
               modelUrl={modelUrl}
               showModel={showModel}
+              explode={explode}
             />
             <Common color='#000000' />
           </Suspense>

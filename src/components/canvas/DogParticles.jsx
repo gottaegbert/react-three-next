@@ -1,8 +1,8 @@
 'use client'
 
 import { useGLTF, useFBO } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   AdditiveBlending,
   MathUtils,
@@ -216,27 +216,43 @@ export function DogParticles({
   flowStrength = 0.25,
   morphDuration = 10,
   showModel = true,
-  modelUrl = '/B2.glb',
+  explode = false,
+  modelUrl = '/B.glb',
   ...props
 }) {
   const group = useRef()
   const pointsRef = useRef()
-  const morphStartRef = useRef(null)
-  const resolvedUrl = modelUrl || '/B2.glb'
+  const morphProgressRef = useRef(0)
+  const targetProgressRef = useRef(explode ? 0 : 1)
+  const sourceTextureRef = useRef(null)
+  const latestTargetRef = useRef(null)
+  const renderer = useThree((state) => state.gl)
+  const resolvedUrl = modelUrl || '/B.glb'
   const { scene } = useGLTF(resolvedUrl)
 
-  const { count, textureSize, basePositions, colors, uvs, baseData, dirData, sphereData, center } = useMemo(
+  const {
+    count,
+    textureSize,
+    basePositions,
+    colors,
+    uvs,
+    baseData,
+    dirData,
+    sphereData: randomSphereData,
+    center,
+  } = useMemo(
     () => createSurfaceParticles(scene, density, surfaceJitter, palette),
     [scene, density, surfaceJitter, palette],
   )
 
   const baseTexture = useMemo(() => createDataTexture(baseData, textureSize), [baseData, textureSize])
   const dirTexture = useMemo(() => createDataTexture(dirData, textureSize), [dirData, textureSize])
-  const sphereTexture = useMemo(() => createDataTexture(sphereData, textureSize), [sphereData, textureSize])
+  const randomTexture = useMemo(() => createDataTexture(randomSphereData, textureSize), [randomSphereData, textureSize])
 
   useEffect(() => () => baseTexture.dispose(), [baseTexture])
   useEffect(() => () => dirTexture.dispose(), [dirTexture])
-  useEffect(() => () => sphereTexture.dispose(), [sphereTexture])
+  useEffect(() => () => randomTexture.dispose(), [randomTexture])
+  useEffect(() => () => sourceTextureRef.current?.dispose(), [])
 
   const model = useMemo(() => {
     if (!scene) return null
@@ -405,22 +421,51 @@ export function DogParticles({
   useEffect(() => () => simulationMaterial.dispose(), [simulationMaterial])
   useEffect(() => () => pointsMaterial.dispose(), [pointsMaterial])
 
+  const setSourceTexture = useCallback(
+    (dataArray) => {
+      if (!dataArray) return
+      sourceTextureRef.current?.dispose()
+      sourceTextureRef.current = createDataTexture(dataArray, textureSize)
+      simulationMaterial.uniforms.uSourceMap.value = sourceTextureRef.current
+    },
+    [simulationMaterial, textureSize],
+  )
+
   useEffect(() => {
-    simulationMaterial.uniforms.uTargetMap.value = baseTexture
-  }, [baseTexture, simulationMaterial])
+    if (!sourceTextureRef.current) {
+      setSourceTexture(randomSphereData)
+    }
+  }, [randomSphereData, setSourceTexture])
+
+  useEffect(() => {
+    let captured = null
+    if (renderer && latestTargetRef.current) {
+      const target = latestTargetRef.current
+      const width = target.width ?? textureSize
+      const height = target.height ?? textureSize
+      if (width === textureSize && height === textureSize) {
+        const buffer = new Float32Array(textureSize * textureSize * 4)
+        try {
+          renderer.readRenderTargetPixels(target, 0, 0, textureSize, textureSize, buffer)
+          captured = buffer
+        } catch {
+          captured = null
+        }
+      }
+    }
+
+    setSourceTexture(captured ?? randomSphereData)
+    targetProgressRef.current = explode ? 0 : 1
+    morphProgressRef.current = 0
+  }, [renderer, explode, randomSphereData, setSourceTexture, textureSize])
+
+  useEffect(() => {
+    simulationMaterial.uniforms.uTargetMap.value = explode ? randomTexture : baseTexture
+  }, [baseTexture, explode, randomTexture, simulationMaterial])
 
   useEffect(() => {
     simulationMaterial.uniforms.uDirMap.value = dirTexture
   }, [dirTexture, simulationMaterial])
-
-  useEffect(() => {
-    simulationMaterial.uniforms.uSourceMap.value = sphereTexture
-    pointsMaterial.uniforms.uPositionTexture.value = sphereTexture
-  }, [simulationMaterial, pointsMaterial, sphereTexture])
-
-  useEffect(() => {
-    morphStartRef.current = null
-  }, [baseTexture])
 
   useEffect(() => {
     simulationMaterial.uniforms.uBreatheAmplitude.value = breatheAmplitude
@@ -480,6 +525,11 @@ export function DogParticles({
     depthBuffer: false,
   })
 
+  useEffect(() => {
+    pointsMaterial.uniforms.uPositionTexture.value = simulationTarget.texture
+    latestTargetRef.current = simulationTarget
+  }, [pointsMaterial, simulationTarget])
+
   const simulationScene = useMemo(() => {
     const sceneObj = new Scene()
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
@@ -492,9 +542,6 @@ export function DogParticles({
 
   useFrame(({ gl, clock }, delta) => {
     if (!baseTexture || !dirTexture || count === 0) return
-    if (morphStartRef.current === null) {
-      morphStartRef.current = clock.elapsedTime
-    }
 
     if (group.current) {
       group.current.rotation.y += delta * rotationSpeed
@@ -503,8 +550,17 @@ export function DogParticles({
 
     const elapsed = clock.elapsedTime
     simulationMaterial.uniforms.uTime.value = elapsed
-    const morphElapsed = elapsed - (morphStartRef.current ?? elapsed)
-    simulationMaterial.uniforms.uMorphProgress.value = Math.min(morphElapsed / Math.max(0.001, morphDuration), 1)
+
+    const target = targetProgressRef.current
+    const step = delta / Math.max(0.001, morphDuration)
+    let current = morphProgressRef.current
+    if (current < target) {
+      current = Math.min(target, current + step)
+    } else if (current > target) {
+      current = Math.max(target, current - step)
+    }
+    morphProgressRef.current = current
+    simulationMaterial.uniforms.uMorphProgress.value = current
 
     gl.setRenderTarget(simulationTarget)
     gl.render(simulationScene.scene, simulationScene.camera)
@@ -512,6 +568,7 @@ export function DogParticles({
 
     pointsMaterial.uniforms.uTime.value = elapsed
     pointsMaterial.uniforms.uPositionTexture.value = simulationTarget.texture
+    latestTargetRef.current = simulationTarget
   })
 
   return (
@@ -529,8 +586,8 @@ export function DogParticles({
   )
 }
 
-useGLTF.preload('/B2.glb')
 useGLTF.preload('/B.glb')
+useGLTF.preload('/Pistol.glb')
 useGLTF.preload('/astronaut.glb')
 useGLTF.preload('/dog.glb')
 useGLTF.preload('/duck.glb')
