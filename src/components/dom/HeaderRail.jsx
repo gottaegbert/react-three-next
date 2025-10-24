@@ -34,7 +34,7 @@ export function HeaderRail({
         className,
       )}
     >
-      <div className='flex w-full items-center gap-4 rounded-full border border-white/15 bg-black/70 px-4 py-3 text-white backdrop-blur-xl sm:px-6'>
+      <div className='flex w-full items-center gap-4 rounded-full border border-white/15 px-4 py-3 text-white sm:px-6'>
         <div className='min-w-[96px] flex-1 sm:flex-none'>
           <span className='block text-[11px] font-semibold uppercase tracking-[0.32em] text-white/75'>
             {name}

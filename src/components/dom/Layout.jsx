@@ -3,6 +3,8 @@
 import { useRef } from 'react'
 import dynamic from 'next/dynamic'
 const Scene = dynamic(() => import('@/components/canvas/Scene'), { ssr: false })
+const SiteHeader = dynamic(() => import('@/components/dom/SiteHeader').then((m) => m.SiteHeader), { ssr: false })
+const SiteFooter = dynamic(() => import('@/components/dom/SiteFooter').then((m) => m.SiteFooter), { ssr: false })
 
 const Layout = ({ children }) => {
   const ref = useRef()
@@ -10,15 +12,20 @@ const Layout = ({ children }) => {
   return (
     <div
       ref={ref}
+      data-scroll-container
       style={{
         position: 'relative',
-        width: ' 100%',
+        width: '100%',
         height: '100%',
         overflow: 'auto',
         touchAction: 'auto',
+        overscrollBehavior: 'none',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
-      {children}
+      <SiteHeader />
+      <div className='pt-28'>{children}</div>
+      <SiteFooter />
       <Scene
         style={{
           position: 'fixed',
