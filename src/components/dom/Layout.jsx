@@ -2,12 +2,16 @@
 
 import { useRef } from 'react'
 import dynamic from 'next/dynamic'
+import { Analytics } from "@vercel/analytics/next"
+
 const Scene = dynamic(() => import('@/components/canvas/Scene'), { ssr: false })
 
 const Layout = ({ children }) => {
   const ref = useRef()
 
   return (
+
+
     <div
       ref={ref}
       style={{
@@ -18,6 +22,7 @@ const Layout = ({ children }) => {
         touchAction: 'auto',
       }}
     >
+          <Analytics/>
       {children}
       <Scene
         style={{
